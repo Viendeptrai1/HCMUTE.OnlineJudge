@@ -678,36 +678,47 @@ HCMUTE.OnlineJudge/
 
 ## 14. Hướng dẫn khởi tạo local
 
-> Phần này sẽ được bổ sung chi tiết sau khi bộ khung code được khởi tạo ở Phase 0.
+Yêu cầu:
 
-Yêu cầu dự kiến (thuần Python, không cần Node.js):
 - Python 3.12+
-- [uv](https://github.com/astral-sh/uv) để quản lý dependency
+- [uv](https://github.com/astral-sh/uv) để quản lý dependency (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
 - Docker Desktop (chạy PostgreSQL + Redis + LocalStack cho SQS/S3)
-- AWS CLI, AWS CDK CLI
-- **Tailwind CSS standalone binary** (không cần Node): tải từ [releases](https://github.com/tailwindlabs/tailwindcss/releases)
-- `isolate` (build từ source trên Linux; trên macOS dev local có thể tạm bypass sandbox hoặc chạy worker trong Docker Linux container)
 
-Lệnh dự kiến:
+Các lệnh `make` đã có sẵn:
 
 ```bash
-docker compose up -d                                  # postgres + redis + localstack
+cp .env.example .env            # copy cấu hình
+make install                    # uv sync --all-packages
+make up                         # docker compose up -d (postgres + redis + localstack)
+make migrate                    # alembic upgrade head
+make dev                        # uvicorn --reload, mở http://localhost:8000
+make worker                     # chạy judge-worker (poll SQS)
 
-cd apps/web
-uv sync                                               # cài dependencies Python
-uv run alembic upgrade head                           # migrate DB
+make seed                       # seed user/bài mẫu (edu/alice/bob — password123)
+make bootstrap-localstack       # tạo SQS queue + S3 bucket trong LocalStack
 
-tailwindcss -i static/css/input.css \
-            -o static/css/app.css --watch &           # build CSS (terminal riêng)
-
-uv run uvicorn app.main:app --reload --port 8000      # chạy FastAPI + Jinja2
-
-cd ../judge-worker
-uv sync
-uv run python -m worker.main                          # poll SQS LocalStack và chấm bài
+make test                       # pytest toàn repo
+make lint                       # ruff + mypy
+make format                     # ruff format + fix
+make revision m="add foo"       # tạo Alembic migration mới
+make new-module name=courses    # copy module problems/ sang courses/
 ```
 
-Mở `http://localhost:8000` — thấy trang HTML render trực tiếp từ server. Chỉnh template Jinja2 → reload trình duyệt là thấy liền, không cần build step cho frontend.
+Bootstrap 1 lệnh cho người mới: `make bootstrap-local` (install → docker up → migrate → tạo SQS/S3 LocalStack).
+
+Luồng chạy đầy đủ (2 shell):
+
+```bash
+# Shell 1
+make bootstrap-local
+make seed
+make dev                  # web → http://localhost:8000
+
+# Shell 2
+make worker               # judge-worker long-poll SQS, chấm rồi cập nhật DB
+```
+
+Đăng nhập `alice / password123` (student) → bấm **Nộp bài** → viết code C++ → xem `/submissions/<id>` tự cập nhật verdict (HTMX polling mỗi 1.5s). Tài khoản `edu` có quyền tạo/sửa bài.
 
 ---
 
@@ -773,6 +784,31 @@ flowchart LR
 ```
 
 Tóm lại: **Compose + biến môi trường** cho local đồng bộ, **`uv.lock` + CI** cho dependency đồng bộ, **CDK/SAM** cho AWS lặp lại được, **PR + staging** trước production — đó là cách vừa teamwork vừa dễ đẩy lên AWS mà README đã mô tả ở roadmap Phase 0.
+
+### 15.9. Thêm module mới (giữ chuẩn SOLID)
+
+Mọi module nghiệp vụ nằm trong `apps/web/app/modules/<name>/` với layout cố định:
+
+| File | Vai trò | Nguyên tắc SOLID |
+| --- | --- | --- |
+| `models.py` | SQLAlchemy ORM (chỉ định nghĩa bảng) | **S** — Single Responsibility |
+| `schemas.py` | Pydantic DTO (`Create/Update/Read` tách riêng) | **S**, **I** — Interface Segregation |
+| `repository.py` | `Protocol` + impl SQLAlchemy (`SqlAlchemyRepository[T]`) | **O**, **L**, **D** |
+| `service.py` | Business logic, nhận repo qua `__init__` | **S**, **D** — Dependency Inversion |
+| `dependencies.py` | `Depends()` factory bơm repo & service | **D** |
+| `router.py` | FastAPI routes (full page + HTMX partial) | **S** — chỉ orchestrate |
+| `templates/<name>/*.html` | Jinja2 template cục bộ, có `_row.html` partial | - |
+
+Quy trình thêm 1 module mới (ví dụ `courses`):
+
+1. `make new-module name=courses` — copy khuôn `problems/` → `courses/` và rename token.
+2. Sửa fields trong `app/modules/courses/models.py` (+ schemas).
+3. `app.include_router(courses_router)` trong `app/main.py`.
+4. `make revision m="add courses"` → Alembic autogenerate migration.
+5. `make migrate` — áp dụng vào DB.
+6. Thêm test trong `apps/web/tests/modules/courses/` (test_repository/service/router).
+
+Nhờ `ProblemService` chỉ biết tới Protocol `ProblemRepository`, **test service có thể dùng in-memory fake repo** (xem `test_service.py`) — ví dụ sống cho Dependency Inversion trong repo này.
 
 ---
 

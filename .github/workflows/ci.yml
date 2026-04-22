@@ -1,0 +1,57 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: lint + type-check + test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: oj
+          POSTGRES_PASSWORD: oj_password
+          POSTGRES_DB: oj_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U oj"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      DATABASE_URL: postgresql+asyncpg://oj:oj_password@localhost:5432/oj_test
+      SYNC_DATABASE_URL: postgresql+psycopg://oj:oj_password@localhost:5432/oj_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.5.4"
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install deps
+        run: uv sync --all-packages --frozen
+
+      - name: Ruff
+        run: uv run ruff check .
+
+      - name: Ruff format check
+        run: uv run ruff format --check .
+
+      - name: Mypy
+        run: uv run mypy apps/web/app apps/judge-worker/worker
+
+      - name: Pytest
+        run: uv run pytest -v

@@ -1,0 +1,20 @@
+<div class="overflow-hidden rounded-lg border border-slate-200 bg-white">
+  <table class="min-w-full divide-y divide-slate-200 text-sm">
+    <thead class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+      <tr>
+        <th class="px-4 py-2">Tên bài</th>
+        <th class="px-4 py-2">Độ khó</th>
+        <th class="px-4 py-2">Thời gian</th>
+        <th class="px-4 py-2">Bộ nhớ</th>
+        <th class="px-4 py-2 text-right">Hành động</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100">
+      {% for p in problems %}
+        {% include "problems/_row.html" %}
+      {% else %}
+        <tr><td colspan="5" class="px-4 py-6 text-center text-slate-500">Chưa có bài nào. Bấm <em>Thêm bài</em> để tạo.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}{{ problem.title }} - HCMUTE OJ{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+  <a href="/problems" class="text-sm text-slate-500 hover:underline">&larr; Danh sách bài</a>
+</div>
+
+<div class="rounded-lg border border-slate-200 bg-white p-6">
+  <div class="mb-4 flex items-center justify-between">
+    <h1 class="text-2xl font-bold">{{ problem.title }}</h1>
+    <div class="flex items-center gap-3 text-sm">
+      <span class="rounded bg-slate-100 px-2 py-0.5 uppercase">{{ problem.difficulty.value }}</span>
+      {% if current_user and current_user.role.value in ("educator", "admin") %}
+        <a href="/problems/{{ problem.id }}/edit" class="text-sky-600 hover:underline">Sửa</a>
+      {% endif %}
+      {% if current_user %}
+        <a href="/submissions/new?problem_id={{ problem.id }}"
+           class="rounded-md bg-emerald-600 px-3 py-1 text-white hover:bg-emerald-700">Nộp bài</a>
+      {% else %}
+        <a href="/auth/login" class="rounded-md bg-emerald-600 px-3 py-1 text-white hover:bg-emerald-700">Đăng nhập để nộp</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <dl class="mb-6 grid grid-cols-2 gap-2 text-sm text-slate-600 sm:grid-cols-4">
+    <div><dt class="text-slate-400">Time limit</dt><dd>{{ problem.time_limit_ms }} ms</dd></div>
+    <div><dt class="text-slate-400">Memory</dt><dd>{{ (problem.memory_limit_kb / 1024) | int }} MB</dd></div>
+    <div><dt class="text-slate-400">Tạo lúc</dt><dd>{{ problem.created_at.strftime("%Y-%m-%d %H:%M") }}</dd></div>
+    <div><dt class="text-slate-400">Cập nhật</dt><dd>{{ problem.updated_at.strftime("%Y-%m-%d %H:%M") }}</dd></div>
+  </dl>
+
+  <article class="prose prose-slate max-w-none">
+    {{ problem.statement_md | markdown }}
+  </article>
+</div>
+{% endblock %}

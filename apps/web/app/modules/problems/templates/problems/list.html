@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Bài tập - HCMUTE OJ{% endblock %}
+
+{% block content %}
+<div class="mb-6 flex items-center justify-between">
+  <h1 class="text-2xl font-bold tracking-tight">Ngân hàng bài tập</h1>
+  {% if current_user and current_user.role.value in ("educator", "admin") %}
+    <a href="/problems/new"
+       class="inline-flex items-center rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700">
+      + Thêm bài
+    </a>
+  {% endif %}
+</div>
+
+<div id="problems-table" hx-target="this" hx-swap="outerHTML">
+  {% include "problems/_table.html" %}
+</div>
+{% endblock %}

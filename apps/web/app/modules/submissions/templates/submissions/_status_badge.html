@@ -1,0 +1,26 @@
+{% macro status_badge(status) -%}
+{%- set s = status.value -%}
+{%- set color = {
+  "pending":        "bg-slate-100 text-slate-700",
+  "judging":        "bg-sky-100 text-sky-700",
+  "accepted":       "bg-emerald-100 text-emerald-700",
+  "wrong_answer":   "bg-rose-100 text-rose-700",
+  "time_limit":     "bg-amber-100 text-amber-800",
+  "memory_limit":   "bg-amber-100 text-amber-800",
+  "runtime_error":  "bg-orange-100 text-orange-800",
+  "compile_error":  "bg-orange-100 text-orange-800",
+  "internal_error": "bg-rose-100 text-rose-800",
+}[s] -%}
+{%- set label = {
+  "pending":        "Đang chờ",
+  "judging":        "Đang chấm…",
+  "accepted":       "AC",
+  "wrong_answer":   "WA",
+  "time_limit":     "TLE",
+  "memory_limit":   "MLE",
+  "runtime_error":  "RE",
+  "compile_error":  "CE",
+  "internal_error": "IE",
+}[s] -%}
+<span class="inline-block rounded px-2 py-0.5 text-xs font-medium {{ color }}">{{ label }}</span>
+{%- endmacro %}

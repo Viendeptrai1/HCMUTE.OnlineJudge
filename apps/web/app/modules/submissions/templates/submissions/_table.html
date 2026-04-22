@@ -1,0 +1,35 @@
+{% from "submissions/_status_badge.html" import status_badge %}
+<div class="overflow-hidden rounded-lg border border-slate-200 bg-white">
+  <table class="min-w-full divide-y divide-slate-200 text-sm">
+    <thead class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+      <tr>
+        <th class="px-4 py-2">Thời điểm</th>
+        <th class="px-4 py-2">Người nộp</th>
+        <th class="px-4 py-2">Bài</th>
+        <th class="px-4 py-2">Ngôn ngữ</th>
+        <th class="px-4 py-2">Trạng thái</th>
+        <th class="px-4 py-2 text-right">Time / Mem</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100">
+      {% for s in items %}
+        <tr>
+          <td class="px-4 py-2 font-mono text-xs text-slate-500">{{ s.created_at.strftime("%H:%M:%S") }}</td>
+          <td class="px-4 py-2">{{ s.user.username }}</td>
+          <td class="px-4 py-2">
+            <a href="/problems/{{ s.problem.id }}" class="text-sky-700 hover:underline">{{ s.problem.title }}</a>
+          </td>
+          <td class="px-4 py-2 uppercase text-slate-600">{{ s.language.value }}</td>
+          <td class="px-4 py-2">
+            <a href="/submissions/{{ s.id }}">{{ status_badge(s.status) }}</a>
+          </td>
+          <td class="px-4 py-2 text-right text-slate-600">
+            {% if s.time_used_ms is not none %}{{ s.time_used_ms }}ms / {{ s.memory_used_kb }}KB{% else %}—{% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="px-4 py-6 text-center text-slate-500">Chưa có bài nộp.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

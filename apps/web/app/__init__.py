@@ -1,0 +1,1 @@
+"""HCMUTE OnlineJudge web application."""
