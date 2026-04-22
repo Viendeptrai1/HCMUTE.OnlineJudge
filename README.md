@@ -20,6 +20,7 @@
 12. [Roadmap phát triển](#12-roadmap-phát-triển)
 13. [Cấu trúc thư mục dự kiến](#13-cấu-trúc-thư-mục-dự-kiến)
 14. [Hướng dẫn khởi tạo local](#14-hướng-dẫn-khởi-tạo-local)
+15. [Quy trình phát triển, môi trường chung & teamwork](#15-quy-trình-phát-triển-môi-trường-chung--teamwork)
 
 ---
 
@@ -707,6 +708,71 @@ uv run python -m worker.main                          # poll SQS LocalStack và 
 ```
 
 Mở `http://localhost:8000` — thấy trang HTML render trực tiếp từ server. Chỉnh template Jinja2 → reload trình duyệt là thấy liền, không cần build step cho frontend.
+
+---
+
+## 15. Quy trình phát triển, môi trường chung & teamwork
+
+Mục tiêu: mọi người cài **cùng một cách** (ít “trên máy tui chạy nhưng CI fail”), cùng **định nghĩa với production AWS** (Postgres, Redis, SQS, S3) nhưng chạy local rẻ/nhanh, và **đẩy lên AWS bằng cùng bộ công cụ** (IaC + pipeline).
+
+### 15.1. Một nguồn sự thật cho môi trường local: Docker Compose
+
+- Một file `docker-compose.yml` ở root repo: **PostgreSQL, Redis, LocalStack (S3 + SQS)** (và tùy chọn tài khoản giả lập nếu cần).
+- App FastAPI + worker kết nối qua **biến môi trường** (`DATABASE_URL`, `REDIS_URL`, `AWS_ENDPOINT_URL` trỏ LocalStack) — không hard-code.
+- Cách dùng chung: clone repo → `docker compose up -d` → `uv sync` → `alembic upgrade` → chạy API/worker. Không cần mỗi người tự cài Postgres riêng.
+
+### 15.2. Cố định phiên bản thư viện: `uv` + `uv.lock`
+
+- Mọi người commit `uv.lock` (tương tự `package-lock`); khi cần thêm thư viện: `uv add` rồi commit cả `pyproject.toml` và `uv.lock`.
+- CI chạy `uv sync --frozen` để bảo đảm build trùng với local.
+
+### 15.3. Tùy chọn: Dev Container (`.devcontainer/`)
+
+- Thư mục mô tả: image có Python, Docker-in-Docker (hoặc `docker` socket), extension gợi ý, post-create chạy `uv sync` + `docker compose up -d`.
+- Lợi ích: dev trên **Windows / macOS / Linux** cùng một môi trường; “tui không biết tại sao lỗi trên Mac” giảm đáng kể. Nên bổ sung ở Phase 0 cùng lúc tạo `docker-compose`.
+
+### 15.4. Cấu hình & bí mật
+
+- Mẫu `apps/web/.env.example` (và tương tự cho worker) liệt kê tất cả biến cần thiết; thực tế copy thành `.env` (gitignore).
+- Trên AWS: secrets qua **Secrets Manager** hoặc **SSM Parameter Store**; Ứng dụng đọc cùng tên biến → code không phân nhánh theo từng môi trường dài dòng.
+- Với nhiều thành viên, một **account AWS dùng chung cho môi trường `dev/staging`** (hoặc AWS Organizations) tránh mỗi người tạo tài nguyên rời rạc; có thể tách IAM role theo người.
+
+### 15.5. Từ local lên AWS: cùng một IaC
+
+- Mã hạ tầng trong `infra/cdk` (hoặc SAM): cùng stack định nghĩa VPC (hoặc dùng default), RDS, S3, SQS, Lambda, Fargate, Cognito nếu có.
+- **Môi trường**: `dev` (staging, deploy từ `main` hoặc từ tag) và `prod` (tag release). Tách bằng `cdk` context hoặc tài khoản AWS riêng (khuyên dùng cho prod).
+- Local không “giống AWS 100%” (Lambda timeout, VPC) nhưng **hành vi DB + queue + S3** phải test được qua LocalStack; phần còn lại do CI chạy integration test tùy theo mức đầu tư.
+
+### 15.6. Làm việc nhóm: Git, PR, CI
+
+- Nhánh `main` luôn **deployable**; feature làm trên `feature/ten-ticket`. Merge qua **Pull Request**, bắt buộc 1 review (có thể tăng dần).
+- Trên mỗi PR: chạy **ruff, mypy, pytest**; sau này thêm E2E (Playwright) nếu cần.
+- Merge `main` → tự deploy lên **staging** (tài khoản/region tách hoặc prefix `stg-`); **prod** chỉ từ tag `v*.*` hoặc branch `release` + approval (tuỳ team).
+
+### 15.7. Tài liệu & hợp đồng API
+
+- OpenAPI từ FastAPI export định kỳ vào `docs/api-spec.yaml` (hoặc auto trong CI) để FE/BE cùng tham chiếu dù server-rendered vẫn cần JSON cho HTMX/JS.
+- Quyết định lớn (ví dụ “đổi queue pattern”) ghi lại dạng **ADR** ngắn trong `docs/adr/`.
+
+### 15.8. Sơ đồ luồng tóm tắt
+
+```mermaid
+flowchart LR
+  Dev[Dev máy từng người]
+  Compose[Docker Compose]
+  LocalStack[LocalStack S3 SQS]
+  PR[PR + CI]
+  Stg[AWS Staging]
+  Prod[AWS Prod]
+
+  Dev --> Compose
+  Compose --> LocalStack
+  Dev --> PR
+  PR --> Stg
+  Stg --> Prod
+```
+
+Tóm lại: **Compose + biến môi trường** cho local đồng bộ, **`uv.lock` + CI** cho dependency đồng bộ, **CDK/SAM** cho AWS lặp lại được, **PR + staging** trước production — đó là cách vừa teamwork vừa dễ đẩy lên AWS mà README đã mô tả ở roadmap Phase 0.
 
 ---
 
