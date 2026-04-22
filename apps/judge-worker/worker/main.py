@@ -23,6 +23,18 @@ from worker.storage import S3SourceFetcher
 
 log = structlog.get_logger()
 
+_VERDICT_MESSAGE_MAX = 8 * 1024
+
+
+def _truncate_message(msg: str | None) -> str | None:
+    """Cap verdict_message để tránh vỡ DB / payload quá lớn."""
+    if msg is None:
+        return None
+    if len(msg) <= _VERDICT_MESSAGE_MAX:
+        return msg
+    head = _VERDICT_MESSAGE_MAX - 64
+    return msg[:head] + "\n…[truncated]"
+
 
 class JudgeWorker:
     """Consume submission từ SQS, gọi Judge, ghi verdict xuống DB.
@@ -106,7 +118,7 @@ class JudgeWorker:
             outcome.status,
             outcome.time_used_ms,
             outcome.memory_used_kb,
-            outcome.message,
+            _truncate_message(outcome.message),
         )
         log.info(
             "judged",

@@ -62,7 +62,7 @@ class Submission(Base, UUIDMixin, TimestampMixin):
     )
     time_used_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     memory_used_kb: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    verdict_message: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    verdict_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     user: Mapped[User] = relationship(User, lazy="joined")
     problem: Mapped[Problem] = relationship(Problem, lazy="joined")
