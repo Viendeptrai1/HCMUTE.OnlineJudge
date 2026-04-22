@@ -41,6 +41,8 @@ class Settings(BaseSettings):
     s3_bucket: str = "oj-local"
     sqs_judge_queue_url: str = ""
 
+    ratelimit_enabled: bool = True
+
     @property
     def is_local(self) -> bool:
         return self.app_env == "local"

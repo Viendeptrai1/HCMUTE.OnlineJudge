@@ -1,7 +1,7 @@
-"""Judge worker entrypoint — SQS long-poll → chấm → cập nhật DB.
+"""Judge worker entrypoint — SQS long-poll → compile → chấm từng testcase → verdict.
 
-Phase 1: dùng `LocalSandbox` stub (luôn Accepted giả). Phase 2 sẽ thay bằng
-`IsolateSandbox` chạy thật trong Linux cgroup.
+Phase 1 dùng `LocalSandbox` chạy subprocess trực tiếp trên host (g++/python3).
+Phase 2 sẽ swap sang `IsolateSandbox` cách ly thật.
 """
 
 from __future__ import annotations
@@ -17,22 +17,31 @@ import structlog
 
 from worker.config import WorkerSettings, get_settings
 from worker.db import SubmissionDAO, SubmissionRow
-from worker.sandbox import LocalSandbox, RunResult, Sandbox
+from worker.judge import Judge, JudgeOutcome
+from worker.sandbox import LocalSandbox, Sandbox
+from worker.storage import S3SourceFetcher
 
 log = structlog.get_logger()
 
 
 class JudgeWorker:
-    """Consume submission từ SQS, gọi Sandbox, ghi verdict xuống DB.
+    """Consume submission từ SQS, gọi Judge, ghi verdict xuống DB.
 
     Dependency Inversion: nhận `Sandbox` + `SubmissionDAO` qua constructor
     để test có thể truyền fake.
     """
 
-    def __init__(self, settings: WorkerSettings, sandbox: Sandbox, dao: SubmissionDAO) -> None:
+    def __init__(
+        self,
+        settings: WorkerSettings,
+        sandbox: Sandbox,
+        dao: SubmissionDAO,
+        source_fetcher: S3SourceFetcher | None = None,
+    ) -> None:
         self._settings = settings
-        self._sandbox = sandbox
+        self._judge = Judge(sandbox)
         self._dao = dao
+        self._source_fetcher = source_fetcher
         self._running = True
         self._sqs = boto3.client(
             "sqs",
@@ -87,49 +96,49 @@ class JudgeWorker:
             return
 
         await asyncio.to_thread(self._dao.mark_judging, sid)
-        status, run_res = await self._judge(row)
+
+        testcases = await asyncio.to_thread(self._dao.fetch_testcases, row.problem_id)
+        outcome = await self._judge_submission(row, testcases)
 
         await asyncio.to_thread(
             self._dao.update_verdict,
             sid,
-            status,
-            run_res.time_used_ms,
-            run_res.memory_used_kb,
-            run_res.stdout or run_res.stderr or None,
+            outcome.status,
+            outcome.time_used_ms,
+            outcome.memory_used_kb,
+            outcome.message,
         )
         log.info(
             "judged",
             submission_id=str(sid),
-            status=status,
-            time_ms=run_res.time_used_ms,
-            mem_kb=run_res.memory_used_kb,
+            status=outcome.status,
+            time_ms=outcome.time_used_ms,
+            mem_kb=outcome.memory_used_kb,
+            testcases=len(testcases),
         )
         await self._delete(message)
 
-    async def _judge(self, row: SubmissionRow) -> tuple[str, RunResult]:
-        """Compile + run bằng Sandbox. Trả (status, last_run_result).
-
-        Hiện `LocalSandbox` luôn trả Accepted stub — chỉ là placeholder để
-        pipeline end-to-end chạy được.
-        """
-
-        compile_res = await self._sandbox.compile(
-            source_path=row.source_code, language=row.language
-        )
-        if compile_res.exit_code != 0:
-            return "compile_error", compile_res
-
-        run_res = await self._sandbox.run(
-            binary_path="/tmp/stub",
-            stdin_path="/dev/null",
+    async def _judge_submission(
+        self,
+        row: SubmissionRow,
+        testcases: list,  # list[TestcaseRow] — tránh import vòng
+    ) -> JudgeOutcome:
+        source = row.source_code
+        # Nếu submission có source_key thì ưu tiên đọc từ S3 (chuẩn bị cho tương lai
+        # khi `source_code` column có thể nullable).
+        if row.source_key and self._source_fetcher is not None:
+            try:
+                source = await asyncio.to_thread(self._source_fetcher.fetch, row.source_key)
+                log.info("source_from_s3", key=row.source_key, len=len(source))
+            except Exception as e:
+                log.warning("s3_fetch_failed", error=str(e), fallback="db")
+        return await self._judge.judge(
+            source=source,
+            language=row.language.lower(),
+            testcases=testcases,
             time_limit_ms=row.time_limit_ms,
             memory_limit_kb=row.memory_limit_kb,
         )
-        if run_res.timed_out:
-            return "time_limit", run_res
-        if run_res.exit_code != 0:
-            return "runtime_error", run_res
-        return "accepted", run_res
 
     async def _delete(self, message: dict[str, Any]) -> None:
         await asyncio.to_thread(
@@ -142,7 +151,19 @@ class JudgeWorker:
 async def _amain() -> None:
     settings = get_settings()
     dao = SubmissionDAO(settings.sync_database_url)
-    worker = JudgeWorker(settings=settings, sandbox=LocalSandbox(), dao=dao)
+    fetcher = S3SourceFetcher(
+        bucket=settings.s3_bucket,
+        region=settings.aws_region,
+        endpoint_url=settings.aws_endpoint_url,
+        access_key=settings.aws_access_key_id,
+        secret_key=settings.aws_secret_access_key,
+    )
+    worker = JudgeWorker(
+        settings=settings,
+        sandbox=LocalSandbox(),
+        dao=dao,
+        source_fetcher=fetcher,
+    )
 
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):

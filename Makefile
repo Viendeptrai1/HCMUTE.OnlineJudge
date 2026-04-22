@@ -1,4 +1,4 @@
-.PHONY: install up down logs dev worker test lint format migrate revision tailwind new-module bootstrap-local bootstrap-localstack seed clean
+.PHONY: install up down logs dev worker test lint format migrate revision tailwind new-module bootstrap-local bootstrap-localstack seed requeue-stuck clean
 
 UV := uv
 
@@ -18,6 +18,11 @@ bootstrap-localstack:
 
 seed:
 	$(UV) run python scripts/seed.py
+
+# Quét submission bị kẹt (PENDING/JUDGING > 60s) và requeue vào SQS.
+# Dùng khi worker từng crash hoặc bạn purge queue bằng tay.
+requeue-stuck:
+	$(UV) run python scripts/requeue_stuck_submissions.py
 
 up:
 	docker compose up -d

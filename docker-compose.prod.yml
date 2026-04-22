@@ -1,0 +1,76 @@
+# Compose "production-ish" cho deploy single-host.
+# Khi deploy thật sẽ tách web + worker ra ECS/EKS/Kubernetes và dùng AWS thật
+# (không còn localstack). File này là mẫu tối giản để chạy bản đóng gói local.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-oj}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-oj}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-oj}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    environment:
+      APP_ENV: prod
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-oj}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-oj}
+      SYNC_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-oj}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-oj}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      S3_BUCKET: ${S3_BUCKET}
+      SQS_JUDGE_QUEUE_URL: ${SQS_JUDGE_QUEUE_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    command:
+      - uvicorn
+      - app.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --workers
+      - "4"
+      - --app-dir
+      - apps/web
+      - --proxy-headers
+      - --forwarded-allow-ips
+      - "*"
+    restart: unless-stopped
+
+  judge-worker:
+    build:
+      context: .
+      dockerfile: apps/judge-worker/Dockerfile
+    environment:
+      APP_ENV: prod
+      SYNC_DATABASE_URL: postgresql://${POSTGRES_USER:-oj}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-oj}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      S3_BUCKET: ${S3_BUCKET}
+      SQS_JUDGE_QUEUE_URL: ${SQS_JUDGE_QUEUE_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Trong production thật: set mem/cpu limit và sử dụng non-root user (đã set trong Dockerfile).
+    # Scale bằng: `docker compose -f docker-compose.prod.yml up -d --scale judge-worker=4`
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

@@ -13,6 +13,7 @@ os.environ.setdefault(
     "SYNC_DATABASE_URL",
     "postgresql+psycopg://oj:oj_password@localhost:5432/oj_test",
 )
+os.environ.setdefault("RATELIMIT_ENABLED", "0")
 
 import pytest_asyncio
 from app.core.config import get_settings

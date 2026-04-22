@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from uuid import UUID
 
-from app.modules.problems.models import Problem
+from app.modules.problems.models import Difficulty, Problem
 from app.modules.problems.repository import ProblemRepository
 from app.modules.problems.schemas import ProblemCreate, ProblemUpdate
 from app.shared.exceptions import EntityNotFoundError
@@ -23,6 +23,23 @@ class ProblemService:
 
     async def list_problems(self, limit: int = 50, offset: int = 0) -> Sequence[Problem]:
         return await self._repo.list(limit=limit, offset=offset)
+
+    async def search(
+        self,
+        *,
+        q: str | None = None,
+        difficulty: Difficulty | None = None,
+        problem_ids: Sequence[UUID] | None = None,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> tuple[Sequence[Problem], int]:
+        return await self._repo.search(
+            q=q,
+            difficulty=difficulty,
+            problem_ids=problem_ids,
+            limit=limit,
+            offset=offset,
+        )
 
     async def get_problem(self, id: UUID) -> Problem:
         problem = await self._repo.get(id)

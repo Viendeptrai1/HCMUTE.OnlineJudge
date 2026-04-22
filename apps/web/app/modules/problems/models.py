@@ -24,6 +24,7 @@ class Problem(Base, UUIDMixin, TimestampMixin):
 
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     statement_md: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    editorial_md: Mapped[str] = mapped_column(Text, nullable=False, default="")
     time_limit_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=1000)
     memory_limit_kb: Mapped[int] = mapped_column(Integer, nullable=False, default=262144)
     difficulty: Mapped[Difficulty] = mapped_column(

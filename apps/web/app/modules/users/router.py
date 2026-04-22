@@ -1,4 +1,4 @@
-"""Auth routes: register / login / logout / me."""
+"""Auth routes: register / login / logout / me + profile public."""
 
 from __future__ import annotations
 

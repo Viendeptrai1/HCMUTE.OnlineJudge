@@ -21,6 +21,7 @@
 13. [Cấu trúc thư mục dự kiến](#13-cấu-trúc-thư-mục-dự-kiến)
 14. [Hướng dẫn khởi tạo local](#14-hướng-dẫn-khởi-tạo-local)
 15. [Quy trình phát triển, môi trường chung & teamwork](#15-quy-trình-phát-triển-môi-trường-chung--teamwork)
+16. [Đóng gói & Deploy](#16-đóng-gói--deploy)
 
 ---
 
@@ -809,6 +810,66 @@ Quy trình thêm 1 module mới (ví dụ `courses`):
 6. Thêm test trong `apps/web/tests/modules/courses/` (test_repository/service/router).
 
 Nhờ `ProblemService` chỉ biết tới Protocol `ProblemRepository`, **test service có thể dùng in-memory fake repo** (xem `test_service.py`) — ví dụ sống cho Dependency Inversion trong repo này.
+
+---
+
+## 16. Đóng gói & Deploy
+
+### 16.1. Build container images
+
+Dự án đã có sẵn Dockerfile cho hai service:
+
+- `apps/web/Dockerfile` — FastAPI + Uvicorn, multi-stage, non-root user, tini, healthcheck.
+- `apps/judge-worker/Dockerfile` — cài thêm `g++` để compile C++, chạy non-root.
+
+Build cả hai từ repo root:
+
+```bash
+docker build -f apps/web/Dockerfile -t oj-web:local .
+docker build -f apps/judge-worker/Dockerfile -t oj-worker:local .
+```
+
+### 16.2. Chạy bản production-ish bằng docker-compose
+
+File `docker-compose.prod.yml` hướng tới deploy single-host (ví dụ VPS). Phụ thuộc AWS thật (S3 + SQS) — cần cấu hình biến môi trường, ví dụ tạo `.env.prod`:
+
+```env
+SECRET_KEY=replace-with-a-real-long-secret
+POSTGRES_PASSWORD=strong-db-password
+
+AWS_REGION=ap-southeast-1
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+S3_BUCKET=oj-prod-source
+SQS_JUDGE_QUEUE_URL=https://sqs.ap-southeast-1.amazonaws.com/<acct>/oj-judge-queue
+```
+
+Chạy:
+
+```bash
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
+# scale thêm worker
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --scale judge-worker=4
+```
+
+Chạy migration trước lần deploy đầu tiên:
+
+```bash
+docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm web \
+  alembic --config apps/web/alembic.ini upgrade head
+```
+
+### 16.3. Quan sát & vận hành
+
+- `GET /healthz` — health check đơn giản (200 ok).
+- `GET /metrics` — Prometheus-style counters + histograms (`oj_http_requests_total`, `oj_http_request_duration_ms_*`).
+- Mỗi response có header `X-Request-ID`; khi `APP_ENV != local` log được xuất dưới dạng JSON lines.
+- Rate-limit token-bucket in-memory áp cho `/auth/login`, `/auth/register`, `/submissions`. Trong cụm nhiều node nên thay bằng Redis.
+
+### 16.4. Bảo mật & sandbox
+
+- Submission source được upload lên S3 (`submissions/{id}.{ext}`); worker ưu tiên đọc từ S3, fallback DB.
+- `LocalSandbox` áp `RLIMIT_AS / RLIMIT_CPU / RLIMIT_FSIZE / RLIMIT_NPROC / RLIMIT_CORE`, `setsid()` để timeout kill cả process group, output cap 2 MB, env sanitized. Production nên nâng cấp sang `isolate` hoặc gVisor/Firecracker.
 
 ---
 

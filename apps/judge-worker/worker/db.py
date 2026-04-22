@@ -22,6 +22,16 @@ class SubmissionRow:
     source_code: str
     time_limit_ms: int
     memory_limit_kb: int
+    source_key: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class TestcaseRow:
+    id: UUID
+    order_index: int
+    input_text: str
+    expected_output: str
+    score: int
 
 
 def _normalize_dsn(url: str) -> str:
@@ -42,7 +52,7 @@ class SubmissionDAO:
     def fetch(self, submission_id: UUID) -> SubmissionRow | None:
         sql = """
             SELECT s.id, s.user_id, s.problem_id, s.language, s.source_code,
-                   p.time_limit_ms, p.memory_limit_kb
+                   p.time_limit_ms, p.memory_limit_kb, s.source_key
               FROM submissions s
               JOIN problems p ON p.id = s.problem_id
              WHERE s.id = %s
@@ -53,6 +63,17 @@ class SubmissionDAO:
             if row is None:
                 return None
             return SubmissionRow(*row)
+
+    def fetch_testcases(self, problem_id: UUID) -> list[TestcaseRow]:
+        sql = """
+            SELECT id, order_index, input_text, expected_output, score
+              FROM testcases
+             WHERE problem_id = %s
+             ORDER BY order_index ASC, created_at ASC
+        """
+        with self._conn() as conn, conn.cursor() as cur:
+            cur.execute(sql, (problem_id,))
+            return [TestcaseRow(*row) for row in cur.fetchall()]
 
     def mark_judging(self, submission_id: UUID) -> None:
         # Postgres enum dùng tên Python (UPPERCASE) do SQLAlchemy mặc định

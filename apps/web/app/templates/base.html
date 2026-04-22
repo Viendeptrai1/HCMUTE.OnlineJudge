@@ -9,12 +9,45 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
 
-  <script src="https://unpkg.com/htmx.org@2.0.3" defer></script>
+  <script src="https://unpkg.com/htmx.org@2.0.3"></script>
   <script src="https://unpkg.com/alpinejs@3.14.3/dist/cdn.min.js" defer></script>
-  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" defer></script>
-  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
-          onload="renderMathInElement(document.body);" defer></script>
-  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-cpp.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+
+  <style>
+    /* Typography cho nội dung Markdown (thay cho Tailwind Typography plugin). */
+    .markdown { color: #0f172a; line-height: 1.65; }
+    .markdown h1 { font-size: 1.5rem; font-weight: 700; margin: 0.2em 0 0.6em; }
+    .markdown h2 { font-size: 1.25rem; font-weight: 700; margin: 1.2em 0 0.5em; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.2em; }
+    .markdown h3 { font-size: 1.05rem; font-weight: 600; margin: 1em 0 0.4em; color: #334155; }
+    .markdown p  { margin: 0.6em 0; }
+    .markdown ul { list-style: disc; padding-left: 1.4em; margin: 0.5em 0; }
+    .markdown ol { list-style: decimal; padding-left: 1.4em; margin: 0.5em 0; }
+    .markdown li { margin: 0.15em 0; }
+    .markdown code:not(pre code) {
+      background: #f1f5f9; padding: 0.1em 0.4em; border-radius: 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em;
+    }
+    .markdown pre {
+      background: #0f172a; color: #e2e8f0;
+      padding: 0.9em 1em; border-radius: 8px; overflow-x: auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85em;
+      margin: 0.8em 0;
+    }
+    .markdown pre code { background: transparent !important; padding: 0; color: inherit; }
+    .markdown blockquote {
+      border-left: 3px solid #cbd5e1; padding: 0.1em 1em; color: #475569;
+      background: #f8fafc; margin: 0.8em 0;
+    }
+    .markdown table { border-collapse: collapse; margin: 0.8em 0; width: auto; }
+    .markdown th, .markdown td { border: 1px solid #e2e8f0; padding: 0.4em 0.8em; }
+    .markdown th { background: #f1f5f9; font-weight: 600; }
+    .markdown a { color: #0284c7; text-decoration: underline; }
+    .markdown hr { border: 0; border-top: 1px solid #e2e8f0; margin: 1em 0; }
+  </style>
 
   {% block head_extra %}{% endblock %}
 </head>
@@ -28,5 +61,26 @@
   <footer class="mx-auto max-w-5xl px-4 py-6 text-xs text-slate-500">
     HCMUTE.OnlineJudge &middot; v{{ "0.1.0" }}
   </footer>
+
+  <script>
+    // Render KaTeX + Prism cho nội dung ban đầu VÀ cho mọi partial mà HTMX swap vào.
+    const KATEX_DELIMS = [
+      { left: "$$", right: "$$", display: true },
+      { left: "\\[", right: "\\]", display: true },
+      { left: "\\(", right: "\\)", display: false },
+      { left: "$",  right: "$",  display: false },
+    ];
+    function enhance(root) {
+      if (window.renderMathInElement) {
+        try { renderMathInElement(root, { delimiters: KATEX_DELIMS, throwOnError: false }); }
+        catch (e) { console.warn("katex:", e); }
+      }
+      if (window.Prism) {
+        Prism.highlightAllUnder(root);
+      }
+    }
+    document.addEventListener("DOMContentLoaded", () => enhance(document.body));
+    document.addEventListener("htmx:afterSwap", (e) => enhance(e.detail.target));
+  </script>
 </body>
 </html>

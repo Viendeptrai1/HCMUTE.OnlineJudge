@@ -23,15 +23,115 @@
     </div>
   </div>
 
-  <dl class="mb-6 grid grid-cols-2 gap-2 text-sm text-slate-600 sm:grid-cols-4">
+  <dl class="mb-4 grid grid-cols-2 gap-2 text-sm text-slate-600 sm:grid-cols-4">
     <div><dt class="text-slate-400">Time limit</dt><dd>{{ problem.time_limit_ms }} ms</dd></div>
     <div><dt class="text-slate-400">Memory</dt><dd>{{ (problem.memory_limit_kb / 1024) | int }} MB</dd></div>
     <div><dt class="text-slate-400">Tạo lúc</dt><dd>{{ problem.created_at.strftime("%Y-%m-%d %H:%M") }}</dd></div>
     <div><dt class="text-slate-400">Cập nhật</dt><dd>{{ problem.updated_at.strftime("%Y-%m-%d %H:%M") }}</dd></div>
   </dl>
 
-  <article class="prose prose-slate max-w-none">
+  {% if problem_tags %}
+    <div class="mb-4 flex flex-wrap items-center gap-1.5 text-xs">
+      <span class="text-slate-400">Tags:</span>
+      {% for t in problem_tags %}
+        <a href="/problems?tag={{ t.slug }}"
+           class="rounded bg-sky-50 px-2 py-0.5 font-medium text-sky-700 hover:bg-sky-100">{{ t.slug }}</a>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {% if has_solved %}
+    <div class="mb-4 inline-block rounded bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
+      ✓ Bạn đã giải bài này
+    </div>
+  {% endif %}
+
+  <article class="markdown">
     {{ problem.statement_md | markdown }}
   </article>
+
+  {% if samples %}
+    <h2 class="mt-8 mb-3 text-lg font-semibold">Ví dụ</h2>
+    <div class="space-y-3">
+      {% for tc in samples %}
+        <div class="grid grid-cols-1 gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 md:grid-cols-2">
+          <div>
+            <div class="mb-1 text-xs font-semibold uppercase text-slate-500">Input #{{ loop.index }}</div>
+            <pre class="overflow-x-auto rounded bg-white p-2 text-sm border border-slate-200"><code>{{ tc.input_text }}</code></pre>
+          </div>
+          <div>
+            <div class="mb-1 text-xs font-semibold uppercase text-slate-500">Output #{{ loop.index }}</div>
+            <pre class="overflow-x-auto rounded bg-white p-2 text-sm border border-slate-200"><code>{{ tc.expected_output }}</code></pre>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {% if current_user and current_user.role.value in ("educator", "admin") %}
+    <div class="mt-6 text-sm">
+      <a href="/problems/{{ problem.id }}/testcases"
+         class="text-sky-600 hover:underline">⚙ Quản lý testcases ({{ testcase_count }})</a>
+    </div>
+  {% endif %}
+
+  {% if can_see_editorial and problem.editorial_md %}
+    <details class="mt-8 rounded-lg border border-amber-200 bg-amber-50 p-4">
+      <summary class="cursor-pointer text-sm font-semibold text-amber-800">
+        📖 Editorial / Lời giải
+        {% if current_user.role.value in ("educator", "admin") and not has_solved %}
+          <span class="ml-2 rounded bg-amber-200 px-1.5 py-0.5 text-[10px]">STAFF VIEW</span>
+        {% endif %}
+      </summary>
+      <article class="markdown mt-3">
+        {{ problem.editorial_md | markdown }}
+      </article>
+    </details>
+  {% elif current_user and not has_solved and problem.editorial_md %}
+    <div class="mt-8 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-500">
+      📖 Editorial sẽ mở khoá sau khi bạn AC bài này.
+    </div>
+  {% endif %}
 </div>
+
+{% if current_user and my_subs %}
+  <section class="mt-8 rounded-lg border border-slate-200 bg-white p-5">
+    <h2 class="mb-3 text-lg font-semibold">Lần nộp của bạn ({{ my_subs | length }})</h2>
+    <div class="overflow-hidden rounded border border-slate-200">
+      <table class="min-w-full divide-y divide-slate-200 text-sm">
+        <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+          <tr>
+            <th class="px-3 py-2 text-left">Thời gian</th>
+            <th class="px-3 py-2 text-left">Ngôn ngữ</th>
+            <th class="px-3 py-2 text-left">Trạng thái</th>
+            <th class="px-3 py-2 text-left">Thời gian chạy</th>
+            <th class="px-3 py-2 text-right"></th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+        {% for s in my_subs %}
+          {% set s_class = {
+            "accepted": "bg-emerald-100 text-emerald-700",
+            "wrong_answer": "bg-rose-100 text-rose-700",
+            "time_limit": "bg-amber-100 text-amber-700",
+            "runtime_error": "bg-orange-100 text-orange-700",
+            "compile_error": "bg-rose-100 text-rose-700",
+            "pending": "bg-slate-100 text-slate-600",
+            "judging": "bg-sky-100 text-sky-700",
+          }.get(s.status.value, "bg-slate-100 text-slate-600") %}
+          <tr>
+            <td class="px-3 py-2 text-slate-600">{{ s.created_at.strftime("%d/%m %H:%M:%S") }}</td>
+            <td class="px-3 py-2 text-slate-600">{{ s.language.value }}</td>
+            <td class="px-3 py-2"><span class="rounded px-2 py-0.5 text-xs {{ s_class }}">{{ s.status.value }}</span></td>
+            <td class="px-3 py-2 text-slate-600">{{ (s.time_used_ms|string + " ms") if s.time_used_ms is not none else "—" }}</td>
+            <td class="px-3 py-2 text-right">
+              <a href="/submissions/{{ s.id }}" class="text-xs text-sky-600 hover:underline">Xem</a>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+{% endif %}
 {% endblock %}

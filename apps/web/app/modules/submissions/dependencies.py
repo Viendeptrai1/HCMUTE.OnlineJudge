@@ -19,6 +19,7 @@ from app.modules.submissions.repository import (
     SubmissionRepository,
 )
 from app.modules.submissions.service import SubmissionService
+from app.shared.storage import NullSourceStorage, S3SourceStorage, SourceStorage
 
 
 def get_submission_repository(
@@ -44,8 +45,24 @@ def get_submission_publisher(
     )
 
 
+@lru_cache(maxsize=1)
+def _build_storage(bucket: str, region: str, endpoint_url: str | None) -> SourceStorage:
+    if not bucket:
+        return NullSourceStorage()
+    return S3SourceStorage(bucket=bucket, region=region, endpoint_url=endpoint_url)
+
+
+def get_source_storage(settings: Settings = Depends(get_settings)) -> SourceStorage:
+    return _build_storage(
+        bucket=settings.s3_bucket,
+        region=settings.aws_region,
+        endpoint_url=settings.aws_endpoint_url,
+    )
+
+
 def get_submission_service(
     repo: SubmissionRepository = Depends(get_submission_repository),
     publisher: SubmissionPublisher = Depends(get_submission_publisher),
+    storage: SourceStorage = Depends(get_source_storage),
 ) -> SubmissionService:
-    return SubmissionService(repo, publisher)
+    return SubmissionService(repo, publisher, storage)

@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}{{ "Sửa lớp" if course else "Tạo lớp mới" }} - HCMUTE OJ{% endblock %}
+
+{% block content %}
+{% set is_edit = course is not none %}
+{% set f = form if form is defined else course %}
+<div class="mx-auto max-w-2xl">
+  <h1 class="mb-6 text-2xl font-bold tracking-tight">
+    {{ "Sửa lớp học" if is_edit else "Tạo lớp học mới" }}
+  </h1>
+
+  {% if error %}
+    <div class="mb-4 rounded-md border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700">
+      {{ error }}
+    </div>
+  {% endif %}
+
+  <form method="post"
+        action="{{ ('/courses/' ~ course.id) if is_edit else '/courses' }}"
+        class="space-y-4 rounded-lg border border-slate-200 bg-white p-6">
+
+    <div>
+      <label class="mb-1 block text-sm font-medium text-slate-700">Mã lớp *</label>
+      <input type="text" name="code" required maxlength="32"
+             value="{{ (f.code if f else '') or '' }}"
+             placeholder="VD: CTT2024-01"
+             class="w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm focus:border-sky-500 focus:ring-sky-500">
+      <p class="mt-1 text-xs text-slate-500">Duy nhất toàn hệ thống, dùng cho URL ngắn.</p>
+    </div>
+
+    <div>
+      <label class="mb-1 block text-sm font-medium text-slate-700">Tên lớp *</label>
+      <input type="text" name="name" required maxlength="255"
+             value="{{ (f.name if f else '') or '' }}"
+             placeholder="VD: Cấu trúc dữ liệu và giải thuật - K24"
+             class="w-full rounded-md border border-slate-300 px-3 py-2 focus:border-sky-500 focus:ring-sky-500">
+    </div>
+
+    <div>
+      <label class="mb-1 block text-sm font-medium text-slate-700">Học kỳ</label>
+      <input type="text" name="semester" maxlength="32"
+             value="{{ (f.semester if f else '') or '' }}"
+             placeholder="VD: HK1 2024-2025"
+             class="w-full rounded-md border border-slate-300 px-3 py-2 focus:border-sky-500 focus:ring-sky-500">
+    </div>
+
+    <div>
+      <label class="mb-1 block text-sm font-medium text-slate-700">Mô tả</label>
+      <textarea name="description" rows="4"
+                placeholder="Mô tả ngắn cho lớp học, Markdown tuỳ ý..."
+                class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:ring-sky-500">{{ (f.description if f else '') or '' }}</textarea>
+    </div>
+
+    <div class="flex items-center justify-between pt-2">
+      <a href="/courses" class="text-sm text-slate-500 hover:text-slate-700">← Huỷ</a>
+      <button type="submit"
+              class="rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700">
+        {{ "Lưu thay đổi" if is_edit else "Tạo lớp" }}
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -6,10 +6,11 @@
 
     <ul class="flex items-center gap-6 text-sm text-slate-700">
       <li><a href="/problems" class="hover:text-sky-600">Bài tập</a></li>
+      <li><a href="/contests" class="hover:text-sky-600">Kỳ thi</a></li>
       {% if current_user %}
+        <li><a href="/courses" class="hover:text-sky-600">Lớp học</a></li>
         <li><a href="/submissions" class="hover:text-sky-600">Bài nộp</a></li>
       {% endif %}
-      <li class="text-slate-400">Kỳ thi (sắp có)</li>
     </ul>
 
     <div class="flex items-center gap-3 text-sm">

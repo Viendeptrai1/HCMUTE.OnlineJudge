@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+{% block title %}{{ course.name }} - HCMUTE OJ{% endblock %}
+
+{% block content %}
+<div class="mb-6 flex items-start justify-between gap-4">
+  <div>
+    <div class="text-xs font-mono text-slate-500">{{ course.code }}{% if course.semester %} · {{ course.semester }}{% endif %}</div>
+    <h1 class="mt-1 text-2xl font-bold tracking-tight">{{ course.name }}</h1>
+    <div class="mt-1 text-sm text-slate-500">
+      Giảng viên: <span class="font-medium text-slate-700">{{ course.educator.username if course.educator else "—" }}</span>
+    </div>
+  </div>
+  {% if can_manage %}
+    <div class="flex items-center gap-2">
+      <a href="/courses/{{ course.id }}/edit"
+         class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">Sửa</a>
+      <form method="post" action="/courses/{{ course.id }}/delete" class="inline"
+            onsubmit="return confirm('Xoá lớp sẽ xoá mọi assignment. Tiếp tục?');">
+        <button type="submit" class="rounded-md border border-rose-300 bg-white px-3 py-1.5 text-sm text-rose-600 hover:bg-rose-50">
+          Xoá
+        </button>
+      </form>
+    </div>
+  {% endif %}
+</div>
+
+{% if course.description %}
+  <article class="markdown mb-8 rounded-lg border border-slate-200 bg-white p-5">
+    {{ course.description | markdown }}
+  </article>
+{% endif %}
+
+<!-- Tiến độ cá nhân -->
+{% if assignments %}
+  {% set my_ac = user_progress.values() | selectattr("accepted") | list | length %}
+  <div class="mb-8 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+    <div class="flex items-center justify-between">
+      <div class="text-sm text-emerald-800">
+        Tiến độ của bạn: <strong>{{ my_ac }}</strong> / {{ assignments | length }} bài đã AC
+      </div>
+      <div class="h-2 w-48 overflow-hidden rounded-full bg-emerald-100">
+        {% set pct = (my_ac * 100 // (assignments | length)) if assignments else 0 %}
+        <div class="h-full bg-emerald-500" style="width: {{ pct }}%"></div>
+      </div>
+    </div>
+  </div>
+{% endif %}
+
+<!-- Danh sách bài tập -->
+<section class="mb-10">
+  <div class="mb-3 flex items-center justify-between">
+    <h2 class="text-lg font-semibold">Bài tập ({{ assignments | length }})</h2>
+  </div>
+
+  {% if assignments %}
+    <div class="overflow-hidden rounded-lg border border-slate-200 bg-white">
+      <table class="min-w-full divide-y divide-slate-200 text-sm">
+        <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+          <tr>
+            <th class="px-4 py-3 text-left w-12">#</th>
+            <th class="px-4 py-3 text-left">Bài</th>
+            <th class="px-4 py-3 text-left">Độ khó</th>
+            <th class="px-4 py-3 text-left">Deadline</th>
+            <th class="px-4 py-3 text-right">Trạng thái</th>
+            {% if can_manage %}<th class="px-4 py-3 text-right"></th>{% endif %}
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+        {% for a in assignments %}
+          {% set prog = user_progress.get(a.problem_id) %}
+          <tr class="hover:bg-slate-50">
+            <td class="px-4 py-2 text-slate-500">{{ loop.index }}</td>
+            <td class="px-4 py-2 font-medium">
+              <a href="/problems/{{ a.problem.id }}" class="hover:text-sky-600">
+                {{ a.problem.title }}
+              </a>
+            </td>
+            <td class="px-4 py-2 text-slate-600">{{ a.problem.difficulty.value }}</td>
+            <td class="px-4 py-2 text-slate-600">
+              {% if a.deadline %}
+                {% set overdue = a.deadline.replace(tzinfo=None) < now %}
+                <span class="{{ 'text-rose-600' if overdue else 'text-slate-600' }}">
+                  {{ a.deadline.strftime("%d/%m/%Y %H:%M") }}
+                </span>
+              {% else %}
+                <span class="text-slate-400">—</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-2 text-right">
+              {% if prog and prog.accepted %}
+                <span class="rounded bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">AC</span>
+              {% elif prog and prog.total_attempts > 0 %}
+                <span class="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">Đã thử {{ prog.total_attempts }}</span>
+              {% else %}
+                <span class="text-xs text-slate-400">Chưa làm</span>
+              {% endif %}
+            </td>
+            {% if can_manage %}
+              <td class="px-4 py-2 text-right">
+                <form method="post" action="/courses/{{ course.id }}/assignments/{{ a.id }}/delete"
+                      class="inline" onsubmit="return confirm('Bỏ gán bài này khỏi lớp?');">
+                  <button type="submit" class="text-xs text-rose-600 hover:underline">Bỏ gán</button>
+                </form>
+              </td>
+            {% endif %}
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-center text-slate-500">
+      Chưa có bài tập nào trong lớp.
+    </div>
+  {% endif %}
+
+  {% if can_manage %}
+    <form method="post" action="/courses/{{ course.id }}/assignments"
+          class="mt-4 rounded-lg border border-slate-200 bg-white p-4">
+      <h3 class="mb-3 text-sm font-semibold text-slate-700">+ Gán bài mới</h3>
+      <div class="grid grid-cols-1 gap-3 sm:grid-cols-4">
+        <div class="sm:col-span-2">
+          <label class="mb-1 block text-xs font-medium text-slate-600">Problem ID</label>
+          <input type="text" name="problem_id" required
+                 placeholder="UUID bài tập (copy từ trang Bài tập)"
+                 class="w-full rounded-md border border-slate-300 px-2 py-1.5 font-mono text-xs">
+        </div>
+        <div>
+          <label class="mb-1 block text-xs font-medium text-slate-600">Deadline</label>
+          <input type="datetime-local" name="deadline"
+                 class="w-full rounded-md border border-slate-300 px-2 py-1.5 text-xs">
+        </div>
+        <div>
+          <label class="mb-1 block text-xs font-medium text-slate-600">Weight</label>
+          <input type="number" name="weight" value="10" min="0"
+                 class="w-full rounded-md border border-slate-300 px-2 py-1.5 text-xs">
+        </div>
+      </div>
+      <div class="mt-3 text-right">
+        <button type="submit"
+                class="rounded-md bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-700">
+          Gán bài
+        </button>
+      </div>
+    </form>
+  {% endif %}
+</section>
+
+<!-- Thành viên -->
+<section class="mb-8">
+  <div class="mb-3 flex items-center justify-between">
+    <h2 class="text-lg font-semibold">Thành viên ({{ members | length }})</h2>
+  </div>
+
+  {% if members %}
+    <div class="overflow-hidden rounded-lg border border-slate-200 bg-white">
+      <table class="min-w-full divide-y divide-slate-200 text-sm">
+        <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+          <tr>
+            <th class="px-4 py-3 text-left">Username</th>
+            <th class="px-4 py-3 text-left">Họ tên</th>
+            <th class="px-4 py-3 text-left">Vai trò lớp</th>
+            {% if can_manage and member_progress %}
+              <th class="px-4 py-3 text-left">Tiến độ</th>
+            {% endif %}
+            {% if can_manage %}<th class="px-4 py-3"></th>{% endif %}
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+        {% set progress_by_user = {} %}
+        {% for mp in member_progress %}{% set _ = progress_by_user.update({mp.user.id: mp}) %}{% endfor %}
+        {% for m in members %}
+          <tr class="hover:bg-slate-50">
+            <td class="px-4 py-2 font-medium">{{ m.user.username }}</td>
+            <td class="px-4 py-2 text-slate-600">{{ m.user.full_name or "—" }}</td>
+            <td class="px-4 py-2 text-slate-600">
+              <span class="rounded bg-slate-100 px-2 py-0.5 text-xs">{{ m.role_in_course.value }}</span>
+            </td>
+            {% if can_manage and member_progress %}
+              {% set mp = progress_by_user.get(m.user.id) %}
+              <td class="px-4 py-2 text-slate-600">
+                {% if mp %}
+                  {{ mp.accepted_count }}/{{ mp.total_problems }} ({{ mp.percent }}%)
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+            {% endif %}
+            {% if can_manage %}
+              <td class="px-4 py-2 text-right">
+                <form method="post" action="/courses/{{ course.id }}/members/{{ m.id }}/delete"
+                      class="inline" onsubmit="return confirm('Loại {{ m.user.username }} khỏi lớp?');">
+                  <button type="submit" class="text-xs text-rose-600 hover:underline">Gỡ</button>
+                </form>
+              </td>
+            {% endif %}
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-center text-slate-500">
+      Lớp chưa có thành viên.
+    </div>
+  {% endif %}
+
+  {% if can_manage %}
+    <form method="post" action="/courses/{{ course.id }}/members"
+          class="mt-4 rounded-lg border border-slate-200 bg-white p-4">
+      <h3 class="mb-3 text-sm font-semibold text-slate-700">+ Mời thành viên</h3>
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-end">
+        <div class="flex-1">
+          <label class="mb-1 block text-xs font-medium text-slate-600">Username hoặc Email</label>
+          <input type="text" name="username_or_email" required
+                 placeholder="VD: alice / alice@hcmut.edu.vn"
+                 class="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm">
+        </div>
+        <div>
+          <label class="mb-1 block text-xs font-medium text-slate-600">Vai trò</label>
+          <select name="role_in_course"
+                  class="rounded-md border border-slate-300 px-3 py-1.5 text-sm">
+            <option value="student">Học viên</option>
+            <option value="ta">TA</option>
+          </select>
+        </div>
+        <button type="submit"
+                class="rounded-md bg-sky-600 px-3 py-2 text-sm font-medium text-white hover:bg-sky-700">
+          Mời
+        </button>
+      </div>
+    </form>
+  {% endif %}
+</section>
+{% endblock %}

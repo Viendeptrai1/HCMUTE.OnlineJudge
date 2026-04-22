@@ -24,6 +24,22 @@
               class="w-full rounded-md border-slate-300 font-mono text-sm shadow-sm focus:border-sky-500 focus:ring-sky-500">{{ problem.statement_md if problem else '' }}</textarea>
   </div>
 
+  <div>
+    <label class="mb-1 block text-sm font-medium text-slate-700">Editorial / Lời giải (Markdown)</label>
+    <textarea name="editorial_md" rows="8"
+              placeholder="Hướng dẫn làm bài. Chỉ hiện với user đã AC + educator/admin."
+              class="w-full rounded-md border-slate-300 font-mono text-sm shadow-sm focus:border-sky-500 focus:ring-sky-500">{{ problem.editorial_md if problem else '' }}</textarea>
+  </div>
+
+  <div>
+    <label class="mb-1 block text-sm font-medium text-slate-700">Tags</label>
+    <input type="text" name="tags_csv"
+           value="{{ problem_tag_slugs or '' }}"
+           placeholder="dp, graph, string (cách nhau dấu phẩy, chữ thường)"
+           class="w-full rounded-md border-slate-300 font-mono text-sm shadow-sm focus:border-sky-500 focus:ring-sky-500">
+    <p class="mt-1 text-xs text-slate-500">Tag sẽ được tự tạo nếu chưa tồn tại.</p>
+  </div>
+
   <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
     <div>
       <label class="mb-1 block text-sm font-medium text-slate-700">Time limit (ms)</label>

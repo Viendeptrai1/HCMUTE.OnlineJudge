@@ -28,9 +28,7 @@ class SubmissionStatus(StrEnum):
 
 class Language(StrEnum):
     CPP = "cpp"
-    C = "c"
     PYTHON = "python"
-    JAVA = "java"
 
 
 class Submission(Base, UUIDMixin, TimestampMixin):
@@ -53,6 +51,8 @@ class Submission(Base, UUIDMixin, TimestampMixin):
         Enum(Language, name="submission_language"), nullable=False
     )
     source_code: Mapped[str] = mapped_column(Text, nullable=False)
+    source_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    """S3 object key — nếu null thì `source_code` là source of truth (legacy)."""
 
     status: Mapped[SubmissionStatus] = mapped_column(
         Enum(SubmissionStatus, name="submission_status"),

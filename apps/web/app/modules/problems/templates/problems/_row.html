@@ -1,6 +1,17 @@
 <tr id="problem-{{ p.id }}">
   <td class="px-4 py-2">
     <a href="/problems/{{ p.id }}" class="font-medium text-sky-700 hover:underline">{{ p.title }}</a>
+    {% set tlist = (tags_by_problem or {}).get(p.id, []) %}
+    {% if tlist %}
+      <div class="mt-1 flex flex-wrap gap-1">
+        {% for t in tlist %}
+          <a href="/problems?tag={{ t.slug }}"
+             class="rounded bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-700 hover:bg-sky-100">
+            {{ t.slug }}
+          </a>
+        {% endfor %}
+      </div>
+    {% endif %}
   </td>
   <td class="px-4 py-2">
     <span class="rounded bg-slate-100 px-2 py-0.5 text-xs uppercase">{{ p.difficulty.value }}</span>
