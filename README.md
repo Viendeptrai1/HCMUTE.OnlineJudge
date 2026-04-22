@@ -1,0 +1,2 @@
+# HCMUTE.OnlineJudge
+on aws
