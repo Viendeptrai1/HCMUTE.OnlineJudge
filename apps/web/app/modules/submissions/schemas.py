@@ -12,6 +12,7 @@ from app.modules.submissions.models import Language, SubmissionStatus
 
 class SubmissionCreate(BaseModel):
     problem_id: UUID
+    contest_id: UUID | None = None
     language: Language
     source_code: str = Field(min_length=1, max_length=200_000)
 

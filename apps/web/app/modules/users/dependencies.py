@@ -28,20 +28,28 @@ def get_user_service(
     return UserService(repo)
 
 
+from fastapi.security import OAuth2PasswordBearer
+from app.shared.security import decode_access_token
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
+
 async def get_current_user_optional(
-    request: Request,
+    token: str | None = Depends(oauth2_scheme),
     service: UserService = Depends(get_user_service),
 ) -> User | None:
-    """Trả về User nếu session cookie có `user_id` hợp lệ, ngược lại None."""
-
-    user_id_str: str | None = request.session.get("user_id")
+    """Trả về User nếu header Authorization có chứa token hợp lệ, ngược lại None."""
+    
+    if not token:
+        return None
+        
+    user_id_str = decode_access_token(token)
     if not user_id_str:
         return None
+        
     try:
         user_id = UUID(user_id_str)
         return await service.get_by_id(user_id)
     except (ValueError, EntityNotFoundError):
-        request.session.pop("user_id", None)
         return None
 
 

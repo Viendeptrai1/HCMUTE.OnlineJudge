@@ -41,3 +41,44 @@ class TestcaseService:
 
     async def delete(self, tc_id: UUID) -> None:
         await self._repo.delete(tc_id)
+
+    async def create_from_zip(self, problem_id: UUID, zip_bytes: bytes) -> dict[str, int]:
+        import zipfile
+        import io
+        import os
+        
+        success = 0
+        error = 0
+        try:
+            with zipfile.ZipFile(io.BytesIO(zip_bytes)) as z:
+                files = z.namelist()
+                inputs = {f for f in files if f.endswith('.in') or f.endswith('.inp')}
+                outputs = {f for f in files if f.endswith('.out') or f.endswith('.ans')}
+                
+                pairs = {}
+                for inp in inputs:
+                    base = os.path.splitext(inp)[0]
+                    out_match = next((o for o in outputs if os.path.splitext(o)[0] == base), None)
+                    if out_match:
+                        pairs[inp] = out_match
+                        
+                for inp, out in pairs.items():
+                    try:
+                        in_text = z.read(inp).decode('utf-8', errors='ignore')
+                        out_text = z.read(out).decode('utf-8', errors='ignore')
+                        tc = Testcase(
+                            problem_id=problem_id,
+                            input_text=in_text,
+                            expected_output=out_text,
+                            is_sample=False,
+                            score=10,
+                            order_index=success,
+                        )
+                        await self._repo.add(tc)
+                        success += 1
+                    except Exception:
+                        error += 1
+        except Exception:
+            pass # Return what we have or 0 if zip is invalid
+            
+        return {"success": success, "error": error}

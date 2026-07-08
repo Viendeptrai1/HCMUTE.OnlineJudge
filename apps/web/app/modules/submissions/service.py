@@ -37,6 +37,7 @@ class SubmissionService:
         entity = Submission(
             user_id=user_id,
             problem_id=data.problem_id,
+            contest_id=data.contest_id,
             language=data.language,
             source_code=data.source_code,
             status=SubmissionStatus.PENDING,

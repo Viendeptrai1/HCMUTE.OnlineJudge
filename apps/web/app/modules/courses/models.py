@@ -38,6 +38,7 @@ class Course(Base, UUIDMixin, TimestampMixin):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     semester: Mapped[str] = mapped_column(String(32), nullable=False, default="")
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    invite_code: Mapped[str | None] = mapped_column(String(32), nullable=True, unique=True, index=True)
 
     educator_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),

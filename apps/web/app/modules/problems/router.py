@@ -4,10 +4,8 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, Response, status
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from app.core.templating import templates
 from app.modules.problems.dependencies import get_problem_service
 from app.modules.problems.models import Difficulty
 from app.modules.problems.schemas import ProblemCreate, ProblemUpdate
@@ -21,7 +19,6 @@ from app.modules.testcases.service import TestcaseService
 from app.modules.users.dependencies import get_current_user_optional, require_role
 from app.modules.users.models import User, UserRole
 from app.shared.exceptions import EntityNotFoundError
-from app.shared.htmx import is_htmx
 
 router = APIRouter(prefix="/problems", tags=["problems"])
 
@@ -29,7 +26,7 @@ _AUTHOR_ROLES = (UserRole.EDUCATOR, UserRole.ADMIN)
 _PAGE_SIZE = 20
 
 
-@router.get("", response_class=HTMLResponse)
+@router.get("")
 async def list_problems(
     request: Request,
     q: str = Query("", description="Từ khoá tìm kiếm trong tiêu đề/đề bài"),
@@ -38,7 +35,7 @@ async def list_problems(
     page: int = Query(1, ge=1),
     service: ProblemService = Depends(get_problem_service),
     tag_service: TagService = Depends(get_tag_service),
-) -> Response:
+) -> dict:
     diff_filter: Difficulty | None = None
     if difficulty and difficulty in (d.value for d in Difficulty):
         diff_filter = Difficulty(difficulty)
@@ -73,64 +70,38 @@ async def list_problems(
         "page_size": _PAGE_SIZE,
         "difficulties": list(Difficulty),
     }
-    template = "problems/_table.html" if is_htmx(request) else "problems/list.html"
-    return templates.TemplateResponse(request, template, ctx)
+    
+    return ctx
 
 
-@router.get("/new", response_class=HTMLResponse)
-async def new_problem_form(
-    request: Request,
-    _user: User = Depends(require_role(*_AUTHOR_ROLES)),
-) -> Response:
-    return templates.TemplateResponse(
-        request,
-        "problems/form.html",
-        {
-            "problem": None,
-            "difficulties": list(Difficulty),
-            "problem_tag_slugs": "",
-        },
-    )
-
-
-@router.post("", response_class=HTMLResponse)
+@router.post("")
 async def create_problem(
-    title: str = Form(...),
-    statement_md: str = Form(""),
-    editorial_md: str = Form(""),
-    time_limit_ms: int = Form(1000),
-    memory_limit_kb: int = Form(262144),
-    difficulty: Difficulty = Form(Difficulty.EASY),
-    tags_csv: str = Form(""),
+    data: ProblemCreate,
+    tags_csv: str = Query(""), # Tag có thể để dạng Query string hoặc gắn vào DTO sau
     service: ProblemService = Depends(get_problem_service),
     tag_service: TagService = Depends(get_tag_service),
     user: User = Depends(require_role(*_AUTHOR_ROLES)),
-) -> Response:
-    data = ProblemCreate(
-        title=title,
-        statement_md=statement_md,
-        editorial_md=editorial_md,
-        time_limit_ms=time_limit_ms,
-        memory_limit_kb=memory_limit_kb,
-        difficulty=difficulty,
-    )
+) -> dict:
+    
     problem = await service.create_problem(data, author_id=user.id)
+    
     slugs = [s for s in tags_csv.split(",") if s.strip()]
     if slugs:
         await tag_service.set_for_problem(problem.id, slugs)
-    return RedirectResponse(url=f"/problems/{problem.id}", status_code=status.HTTP_303_SEE_OTHER)
+        
+    return {"message": "Tạo bài tập thành công", "problem_id": str(problem.id)}
 
 
-@router.get("/{problem_id}", response_class=HTMLResponse)
+@router.get("/{problem_id}")
 async def problem_detail(
     problem_id: UUID,
-    request: Request,
+    contest_id: UUID | None = Query(None),
     service: ProblemService = Depends(get_problem_service),
     tc_service: TestcaseService = Depends(get_testcase_service),
     tag_service: TagService = Depends(get_tag_service),
     submission_service: SubmissionService = Depends(get_submission_service),
     current_user: User | None = Depends(get_current_user_optional),
-) -> Response:
+) -> dict:
     try:
         problem = await service.get_problem(problem_id)
     except EntityNotFoundError as e:
@@ -158,89 +129,56 @@ async def problem_detail(
         )
     )
 
-    return templates.TemplateResponse(
-        request,
-        "problems/detail.html",
-        {
-            "problem": problem,
-            "author_roles": _AUTHOR_ROLES,
-            "samples": samples,
-            "testcase_count": len(all_tcs),
-            "problem_tags": problem_tags,
-            "my_subs": my_subs,
-            "has_solved": has_solved,
-            "can_see_editorial": can_see_editorial,
-        },
-    )
+    return {
+        "problem": problem,
+        "samples": samples,
+        "testcase_count": len(all_tcs),
+        "problem_tags": problem_tags,
+        "my_subs": my_subs,
+        "has_solved": has_solved,
+        "can_see_editorial": can_see_editorial,
+        "contest_id": contest_id,
+    }
 
 
-@router.get("/{problem_id}/edit", response_class=HTMLResponse)
-async def edit_problem_form(
-    problem_id: UUID,
-    request: Request,
-    service: ProblemService = Depends(get_problem_service),
-    tag_service: TagService = Depends(get_tag_service),
-    _user: User = Depends(require_role(*_AUTHOR_ROLES)),
-) -> Response:
-    try:
-        problem = await service.get_problem(problem_id)
-    except EntityNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    current_tags = await tag_service.list_for_problem(problem_id)
-    return templates.TemplateResponse(
-        request,
-        "problems/form.html",
-        {
-            "problem": problem,
-            "difficulties": list(Difficulty),
-            "problem_tag_slugs": ",".join(t.slug for t in current_tags),
-        },
-    )
-
-
-@router.post("/{problem_id}", response_class=HTMLResponse)
+# 1. Đổi @router.post thành @router.put (chuẩn REST API cho Update)
+@router.put("/{problem_id}")
 async def update_problem(
     problem_id: UUID,
-    title: str = Form(...),
-    statement_md: str = Form(""),
-    editorial_md: str = Form(""),
-    time_limit_ms: int = Form(1000),
-    memory_limit_kb: int = Form(262144),
-    difficulty: Difficulty = Form(Difficulty.EASY),
-    tags_csv: str = Form(""),
+    data: ProblemUpdate, # 2. Nhận nguyên một Object JSON từ Frontend
+    tags_csv: str = Query(""), # Lấy tag từ URL query string
     service: ProblemService = Depends(get_problem_service),
     tag_service: TagService = Depends(get_tag_service),
-    _user: User = Depends(require_role(*_AUTHOR_ROLES)),
-) -> Response:
-    data = ProblemUpdate(
-        title=title,
-        statement_md=statement_md,
-        editorial_md=editorial_md,
-        time_limit_ms=time_limit_ms,
-        memory_limit_kb=memory_limit_kb,
-        difficulty=difficulty,
-    )
+    _user: User = Depends(require_role(*_AUTHOR_ROLES)), # Chặn quyền: Chỉ Giáo viên/Admin mới được sửa
+) -> dict: # 3. Trả về kiểu dict (JSON)
+    
     try:
+        # Gọi xuống service để update dữ liệu vào Database
         await service.update_problem(problem_id, data)
     except EntityNotFoundError as e:
+        # Nếu không tìm thấy bài tập -> Ném lỗi 404
         raise HTTPException(status_code=404, detail=str(e)) from e
+        
+    # Cập nhật lại Tags (nếu có truyền lên)
     slugs = [s for s in tags_csv.split(",") if s.strip()]
-    await tag_service.set_for_problem(problem_id, slugs)
-    return RedirectResponse(url=f"/problems/{problem_id}", status_code=status.HTTP_303_SEE_OTHER)
+    if slugs:
+        await tag_service.set_for_problem(problem_id, slugs)
+        
+    # 4. Trả về JSON báo thành công thay vì Redirect HTML
+    return {
+        "message": "Cập nhật bài tập thành công", 
+        "problem_id": str(problem_id)
+    }
 
 
-@router.delete("/{problem_id}", response_class=HTMLResponse)
+@router.delete("/{problem_id}")
 async def delete_problem(
     problem_id: UUID,
-    request: Request,
     service: ProblemService = Depends(get_problem_service),
     _user: User = Depends(require_role(*_AUTHOR_ROLES)),
-) -> Response:
+) -> dict:
     try:
         await service.delete_problem(problem_id)
     except EntityNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
-
-    if is_htmx(request):
-        return HTMLResponse(content="", status_code=200)
-    return RedirectResponse(url="/problems", status_code=status.HTTP_303_SEE_OTHER)
+    return {"message": "Đã xóa bài tập"}

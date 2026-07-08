@@ -21,12 +21,14 @@ class SqsSubmissionPublisher:
     Endpoint URL = LocalStack ở local, AWS thật ở prod.
     """
 
-    def __init__(self, queue_url: str, region: str, endpoint_url: str | None = None) -> None:
+    def __init__(self, queue_url: str, region: str, endpoint_url: str | None = None, aws_access_key_id: str | None = None, aws_secret_access_key: str | None = None) -> None:
         self._queue_url = queue_url
         self._client = boto3.client(
             "sqs",
             region_name=region,
             endpoint_url=endpoint_url,
+            aws_access_key_id=aws_access_key_id,
+            aws_secret_access_key=aws_secret_access_key,
         )
 
     async def publish(self, submission_id: UUID) -> None:

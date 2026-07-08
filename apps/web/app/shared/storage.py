@@ -31,12 +31,16 @@ class S3SourceStorage:
         bucket: str,
         region: str,
         endpoint_url: str | None = None,
+        aws_access_key_id: str | None = None,
+        aws_secret_access_key: str | None = None,
     ) -> None:
         self._bucket = bucket
         self._client = boto3.client(
             "s3",
             region_name=region,
             endpoint_url=endpoint_url,
+            aws_access_key_id=aws_access_key_id,
+            aws_secret_access_key=aws_secret_access_key,
         )
 
     async def put(self, key: str, source: str) -> None:

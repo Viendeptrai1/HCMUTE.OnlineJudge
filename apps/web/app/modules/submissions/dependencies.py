@@ -29,10 +29,10 @@ def get_submission_repository(
 
 
 @lru_cache(maxsize=1)
-def _build_publisher(queue_url: str, region: str, endpoint_url: str | None) -> SubmissionPublisher:
+def _build_publisher(queue_url: str, region: str, endpoint_url: str | None, aws_access_key_id: str | None, aws_secret_access_key: str | None) -> SubmissionPublisher:
     if not queue_url:
         return InMemorySubmissionPublisher()
-    return SqsSubmissionPublisher(queue_url=queue_url, region=region, endpoint_url=endpoint_url)
+    return SqsSubmissionPublisher(queue_url=queue_url, region=region, endpoint_url=endpoint_url, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key)
 
 
 def get_submission_publisher(
@@ -42,14 +42,16 @@ def get_submission_publisher(
         queue_url=settings.sqs_judge_queue_url,
         region=settings.aws_region,
         endpoint_url=settings.aws_endpoint_url,
+        aws_access_key_id=settings.aws_access_key_id,
+        aws_secret_access_key=settings.aws_secret_access_key,
     )
 
 
 @lru_cache(maxsize=1)
-def _build_storage(bucket: str, region: str, endpoint_url: str | None) -> SourceStorage:
+def _build_storage(bucket: str, region: str, endpoint_url: str | None, aws_access_key_id: str | None, aws_secret_access_key: str | None) -> SourceStorage:
     if not bucket:
         return NullSourceStorage()
-    return S3SourceStorage(bucket=bucket, region=region, endpoint_url=endpoint_url)
+    return S3SourceStorage(bucket=bucket, region=region, endpoint_url=endpoint_url, aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key)
 
 
 def get_source_storage(settings: Settings = Depends(get_settings)) -> SourceStorage:
@@ -57,6 +59,8 @@ def get_source_storage(settings: Settings = Depends(get_settings)) -> SourceStor
         bucket=settings.s3_bucket,
         region=settings.aws_region,
         endpoint_url=settings.aws_endpoint_url,
+        aws_access_key_id=settings.aws_access_key_id,
+        aws_secret_access_key=settings.aws_secret_access_key,
     )
 
 

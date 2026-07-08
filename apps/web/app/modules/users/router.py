@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Form, Request, Response, status
-from fastapi.responses import HTMLResponse, RedirectResponse
-from pydantic import ValidationError
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, ValidationError
+from app.shared.security import create_access_token
+from app.modules.users.schemas import UserCreate
+from app.shared.exceptions import DomainError, EntityNotFoundError
 
-from app.core.templating import templates
 from app.modules.users.dependencies import get_user_service, require_user
 from app.modules.users.models import User, UserRole
 from app.modules.users.schemas import UserCreate
@@ -18,94 +19,91 @@ from app.modules.users.service import (
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+class LoginRequest(BaseModel):
+    identifier: str
+    password: str
 
-@router.get("/login", response_class=HTMLResponse)
-async def login_form(request: Request) -> Response:
-    return templates.TemplateResponse(request, "auth/login.html", {"error": None})
+class ForgotPasswordRequest(BaseModel):
+    email: str
 
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
 
-@router.post("/login", response_class=HTMLResponse)
+@router.post("/login")
 async def login(
-    request: Request,
-    identifier: str = Form(...),
-    password: str = Form(...),
+    data: LoginRequest,
     service: UserService = Depends(get_user_service),
-) -> Response:
+) -> dict:
     try:
-        user = await service.authenticate(identifier, password)
+        # Gọi xuống tầng Service để xác thực người dùng
+        user = await service.authenticate(data.identifier, data.password)
     except InvalidCredentialsError:
-        return templates.TemplateResponse(
-            request,
-            "auth/login.html",
-            {"error": "Email/username hoặc mật khẩu không đúng."},
-            status_code=status.HTTP_400_BAD_REQUEST,
-        )
-    request.session["user_id"] = str(user.id)
-    return RedirectResponse(url="/problems", status_code=status.HTTP_303_SEE_OTHER)
+        # Nếu sai thông tin đăng nhập, trả về lỗi
+        raise HTTPException(status_code=400, detail="Tài khoản hoặc mật khẩu không đúng")
+    
+    # Nếu xác thực thành công, tạo JWT token chứa User ID
+    token = create_access_token({"sub": str(user.id)})
+
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user_id": str(user.id)
+    }
 
 
-@router.get("/register", response_class=HTMLResponse)
-async def register_form(request: Request) -> Response:
-    return templates.TemplateResponse(
-        request,
-        "auth/register.html",
-        {"error": None, "roles": list(UserRole)},
-    )
-
-
-@router.post("/register", response_class=HTMLResponse)
+@router.post("/register")
 async def register(
-    request: Request,
-    email: str = Form(...),
-    username: str = Form(...),
-    password: str = Form(...),
-    full_name: str = Form(""),
-    role: UserRole = Form(UserRole.STUDENT),
+    data: UserCreate,
     service: UserService = Depends(get_user_service),
-) -> Response:
-    try:
-        data = UserCreate(
-            email=email,
-            username=username,
-            password=password,
-            full_name=full_name,
-            role=role,
-        )
-    except ValidationError as exc:
-        return templates.TemplateResponse(
-            request,
-            "auth/register.html",
-            {"error": _format_validation_error(exc), "roles": list(UserRole)},
-            status_code=status.HTTP_400_BAD_REQUEST,
-        )
-
+) -> dict:
     try:
         user = await service.register(data)
     except UserAlreadyExistsError as exc:
-        return templates.TemplateResponse(
-            request,
-            "auth/register.html",
-            {"error": str(exc), "roles": list(UserRole)},
-            status_code=status.HTTP_400_BAD_REQUEST,
-        )
-    request.session["user_id"] = str(user.id)
-    return RedirectResponse(url="/problems", status_code=status.HTTP_303_SEE_OTHER)
+        raise HTTPException(status_code=400, detail=str(exc))
+    
+    # Trả về thông tin User
+    return {
+        "message": "Đăng ký thành công",
+        "user_id": str(user.id),
+        "email": user.email
+    }
 
 
-@router.post("/logout")
-async def logout(request: Request) -> Response:
-    request.session.pop("user_id", None)
-    return RedirectResponse(url="/problems", status_code=status.HTTP_303_SEE_OTHER)
 
+@router.get("/me")
+async def me(
+    current_user: User = Depends(require_user)
+) -> dict:
+    return {
+        "id": str(current_user.id),
+        "email": current_user.email,
+        "username": current_user.username,
+        "role": current_user.role.value
+    }
 
-@router.get("/me", response_class=HTMLResponse)
-async def me(request: Request, user: User = Depends(require_user)) -> Response:
-    return templates.TemplateResponse(request, "auth/me.html", {"current_user": user})
+@router.post("/forgot-password")
+async def forgot_password(
+    data: ForgotPasswordRequest,
+    service: UserService = Depends(get_user_service)
 
+) -> dict:
+    token = service.generate_reset_token(data.email)
+    reset_url = f"http://localhost:3000/reset-password?token={token}"
 
-def _format_validation_error(exc: ValidationError) -> str:
-    msgs = []
-    for err in exc.errors():
-        loc = ".".join(str(p) for p in err["loc"])
-        msgs.append(f"{loc}: {err['msg']}")
-    return "; ".join(msgs)
+    return {
+        "message": "Vui lòng kiểm tra email để đặt lại mật khẩu",
+        "reset_url_debug": reset_url
+    }
+
+@router.post("/reset-password")
+async def reset_password(
+    data: ResetPasswordRequest,
+    service: UserService = Depends(get_user_service)
+) -> dict:
+    try:
+        await service.reset_password(data.token, data.new_password)
+    except (DomainError, EntityNotFoundError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    
+    return {"message": "Đặt lại mật khẩu thành công"}

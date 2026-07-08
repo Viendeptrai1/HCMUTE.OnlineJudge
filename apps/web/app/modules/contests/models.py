@@ -54,6 +54,7 @@ class Contest(Base, UUIDMixin, TimestampMixin):
         nullable=False,
         default=ContestVisibility.PUBLIC,
     )
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     penalty_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=20)
 
     created_by_id: Mapped[uuid.UUID] = mapped_column(

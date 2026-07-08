@@ -23,6 +23,7 @@ class User(Base, UUIDMixin, TimestampMixin):
     username: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     full_name: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    student_code: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True, index=True)
     role: Mapped[UserRole] = mapped_column(
         Enum(UserRole, name="user_role"),
         nullable=False,

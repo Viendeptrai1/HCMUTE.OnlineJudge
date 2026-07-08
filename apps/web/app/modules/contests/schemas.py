@@ -19,6 +19,7 @@ class ContestCreate(BaseModel):
     scoring_mode: ScoringMode = ScoringMode.ICPC
     visibility: ContestVisibility = ContestVisibility.PUBLIC
     penalty_minutes: int = 20
+    password: str | None = None
 
 
 class ContestUpdate(BaseModel):
@@ -30,6 +31,7 @@ class ContestUpdate(BaseModel):
     scoring_mode: ScoringMode | None = None
     visibility: ContestVisibility | None = None
     penalty_minutes: int | None = None
+    password: str | None = None
 
 
 class ContestProblemCreate(BaseModel):

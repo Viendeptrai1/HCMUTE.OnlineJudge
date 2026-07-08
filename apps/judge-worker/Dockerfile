@@ -38,7 +38,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PATH="/app/.venv/bin:${PATH}"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      g++ tini ca-certificates \
+      g++ gcc default-jdk tini ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd -r oj && useradd -r -g oj -d /home/oj -m oj
 

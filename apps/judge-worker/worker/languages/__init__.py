@@ -29,4 +29,16 @@ LANGUAGES: dict[str, LanguageSpec] = {
         compile_cmd=None,
         run_cmd=["python3", "{src}"],
     ),
+    "c": LanguageSpec(
+        name="C",
+        source_ext=".c",
+        compile_cmd=["gcc", "-O2", "{src}", "-o", "{bin}", "-lm"],
+        run_cmd=["{bin}"],
+    ),
+    "java": LanguageSpec(
+        name="Java",
+        source_ext=".java",
+        compile_cmd=["javac", "{src}"],
+        run_cmd=["java", "-cp", "{workdir}", "Main"],
+    ),
 }

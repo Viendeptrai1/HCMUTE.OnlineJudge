@@ -6,6 +6,7 @@ Tách 3 service nhỏ để từng use case có dependency rõ ràng (SRP).
 from __future__ import annotations
 
 from collections.abc import Sequence
+import uuid
 from uuid import UUID
 
 from app.modules.courses.models import Course, CourseProblem, CourseRole, Enrollment
@@ -74,6 +75,7 @@ class CourseService:
             name=data.name,
             semester=data.semester,
             description=data.description,
+            invite_code=uuid.uuid4().hex[:8].upper(),
             educator_id=educator_id,
         )
         return await self._courses.add(course)
@@ -140,8 +142,90 @@ class EnrollmentService:
         )
         return await self._enrollments.add(enrollment)
 
+    async def enroll_by_invite_code(
+        self, invite_code: str, user_id: UUID
+    ) -> Enrollment:
+        course = await self._courses.get_by_invite_code(invite_code)
+        if course is None:
+            raise EntityNotFoundError("Course", invite_code)
+        existing = await self._enrollments.get(course.id, user_id)
+        if existing is not None:
+            raise AlreadyEnrolledError("Bạn đã tham gia lớp này")
+        enrollment = Enrollment(
+            course_id=course.id,
+            user_id=user_id,
+            role_in_course=CourseRole.STUDENT,
+        )
+        return await self._enrollments.add(enrollment)
+
     async def remove(self, enrollment_id: UUID) -> None:
         await self._enrollments.delete(enrollment_id)
+
+    async def import_from_csv_content(self, course_id: UUID, content: str) -> dict[str, int]:
+        import csv
+        from app.modules.users.models import User, UserRole
+        from app.modules.users.security import hash_password
+        import time
+
+        course = await self._courses.get(course_id)
+        if course is None:
+            raise EntityNotFoundError("Course", course_id)
+
+        lines = content.strip().splitlines()
+        if not lines:
+            return {"success": 0, "error": 0}
+
+        reader = csv.DictReader(lines)
+        success_count = 0
+        error_count = 0
+
+        for row in reader:
+            row_lower = {k.strip().lower() if k else "": v.strip() for k, v in row.items()}
+            email = row_lower.get("email")
+            student_code = row_lower.get("mssv") or row_lower.get("student_code")
+            full_name = row_lower.get("ho ten") or row_lower.get("họ tên") or row_lower.get("full_name") or ""
+
+            if not email:
+                error_count += 1
+                continue
+
+            user = await self._users.get_by_email(email)
+            if not user:
+                base_username = email.split("@")[0]
+                username = base_username
+                while await self._users.get_by_username(username):
+                    username = f"{base_username}_{int(time.time()*1000)}"
+                
+                user = User(
+                    email=email,
+                    username=username,
+                    password_hash=hash_password(student_code or "123456"),
+                    full_name=full_name,
+                    student_code=student_code,
+                    role=UserRole.STUDENT,
+                )
+                try:
+                    user = await self._users.add(user)
+                except Exception:
+                    error_count += 1
+                    continue
+            
+            existing = await self._enrollments.get(course.id, user.id)
+            if existing is None:
+                try:
+                    enrollment = Enrollment(
+                        course_id=course.id,
+                        user_id=user.id,
+                        role_in_course=CourseRole.STUDENT,
+                    )
+                    await self._enrollments.add(enrollment)
+                    success_count += 1
+                except Exception:
+                    error_count += 1
+            else:
+                success_count += 1
+                
+        return {"success": success_count, "error": error_count}
 
 
 class AssignmentService:

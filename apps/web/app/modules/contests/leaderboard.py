@@ -60,11 +60,12 @@ class LeaderboardService:
         problem_ids = [cp.problem_id for cp in cps]
         points = {cp.problem_id: cp.points for cp in cps}
 
-        # 2. Lấy mọi submission IN-WINDOW
+        # 2. Lấy mọi submission IN-WINDOW thuộc về contest này
         sub_stmt = (
             select(Submission)
             .where(
                 and_(
+                    Submission.contest_id == contest.id,
                     Submission.problem_id.in_(problem_ids),
                     Submission.created_at >= contest.start_at,
                     Submission.created_at <= contest.end_at,

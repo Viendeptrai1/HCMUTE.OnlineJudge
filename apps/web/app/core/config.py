@@ -37,6 +37,8 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
 
     aws_endpoint_url: str | None = None
+    aws_access_key_id: str | None = None
+    aws_secret_access_key: str | None = None
     aws_region: str = "us-east-1"
     s3_bucket: str = "oj-local"
     sqs_judge_queue_url: str = ""

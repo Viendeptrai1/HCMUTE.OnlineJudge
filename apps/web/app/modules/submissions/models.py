@@ -27,7 +27,9 @@ class SubmissionStatus(StrEnum):
 
 
 class Language(StrEnum):
+    C = "c"
     CPP = "cpp"
+    JAVA = "java"
     PYTHON = "python"
 
 
@@ -44,6 +46,12 @@ class Submission(Base, UUIDMixin, TimestampMixin):
         PG_UUID(as_uuid=True),
         ForeignKey("problems.id", ondelete="CASCADE"),
         nullable=False,
+        index=True,
+    )
+    contest_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("contests.id", ondelete="SET NULL"),
+        nullable=True,
         index=True,
     )
 

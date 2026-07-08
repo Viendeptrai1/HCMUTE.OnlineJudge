@@ -56,3 +56,26 @@ class UserService:
         if user is None:
             raise EntityNotFoundError("User", user_id)
         return user
+
+    def generate_reset_token(self, email: str) -> str:
+        from itsdangerous import URLSafeTimedSerializer
+        from app.core.config import settings
+        serializer = URLSafeTimedSerializer(settings.SECRET_KEY)
+        return serializer.dumps(email, salt="password-reset")
+
+    async def reset_password(self, token: str, new_password: str) -> None:
+        from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
+        from app.core.config import settings
+        from app.modules.users.security import hash_password
+        
+        serializer = URLSafeTimedSerializer(settings.SECRET_KEY)
+        try:
+            email = serializer.loads(token, salt="password-reset", max_age=3600)
+        except (SignatureExpired, BadSignature):
+            raise DomainError("Token không hợp lệ hoặc đã hết hạn")
+            
+        user = await self._repo.get_by_email(email)
+        if not user:
+            raise EntityNotFoundError("User", email)
+            
+        await self._repo.update(user, {"password_hash": hash_password(new_password)})

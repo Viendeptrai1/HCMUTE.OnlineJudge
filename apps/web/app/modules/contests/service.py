@@ -68,6 +68,11 @@ class ContestService:
             raise ContestSlugTakenError(f"Slug '{data.slug}' đã tồn tại")
         if data.end_at <= data.start_at:
             raise ContestWindowInvalidError("end_at phải sau start_at")
+        password_hash = None
+        if data.password:
+            from app.modules.users.security import hash_password
+            password_hash = hash_password(data.password)
+
         c = Contest(
             slug=data.slug,
             title=data.title,
@@ -77,13 +82,22 @@ class ContestService:
             scoring_mode=data.scoring_mode,
             visibility=data.visibility,
             penalty_minutes=data.penalty_minutes,
+            password_hash=password_hash,
             created_by_id=creator_id,
         )
         return await self._repo.add(c)
 
     async def update(self, contest_id: UUID, data: ContestUpdate) -> Contest:
         c = await self.get(contest_id)
-        updates = {k: v for k, v in data.model_dump(exclude_unset=True).items() if v is not None}
+        updates = {k: v for k, v in data.model_dump(exclude_unset=True).items() if v is not None and k != "password"}
+        
+        if data.password is not None:
+            if data.password == "":
+                updates["password_hash"] = None
+            else:
+                from app.modules.users.security import hash_password
+                updates["password_hash"] = hash_password(data.password)
+
         if "slug" in updates and updates["slug"] != c.slug:
             coll = await self._repo.get_by_slug(str(updates["slug"]))
             if coll is not None and coll.id != c.id:
@@ -132,7 +146,13 @@ class ContestService:
             return True
         return await self._reg_repo.get(contest.id, user.id) is not None
 
-    async def register_user(self, contest_id: UUID, user_id: UUID) -> ContestRegistration:
+    async def register_user(self, contest_id: UUID, user_id: UUID, password: str = "") -> ContestRegistration:
+        contest = await self.get(contest_id)
+        if contest.password_hash:
+            from app.modules.users.security import verify_password
+            if not verify_password(password, contest.password_hash):
+                raise DomainError("Sai mật khẩu contest")
+                
         existing = await self._reg_repo.get(contest_id, user_id)
         if existing is not None:
             return existing

@@ -16,7 +16,10 @@ from __future__ import annotations
 
 import asyncio
 import os
-import resource
+try:
+    import resource
+except ImportError:
+    resource = None  # type: ignore
 import shutil
 import subprocess
 import sys
@@ -84,7 +87,12 @@ class LocalSandbox:
             return CompileResult(ok=False, binary_path="", stderr=f"unsupported language: {language}", workdir="")
 
         workdir = tempfile.mkdtemp(prefix="oj_sub_")
-        src_path = str(Path(workdir) / f"source{spec.source_ext}")
+        
+        if language == "java":
+            src_path = str(Path(workdir) / "Main.java")
+        else:
+            src_path = str(Path(workdir) / f"source{spec.source_ext}")
+            
         Path(src_path).write_text(source, encoding="utf-8")
 
         bin_path = str(Path(workdir) / "program")
@@ -93,7 +101,7 @@ class LocalSandbox:
             # Ngôn ngữ thông dịch — chạy thẳng source, "binary" = source path.
             return CompileResult(ok=True, binary_path=src_path, stderr="", workdir=workdir)
 
-        cmd = [part.replace("{src}", src_path).replace("{bin}", bin_path) for part in spec.compile_cmd]
+        cmd = [part.replace("{src}", src_path).replace("{bin}", bin_path).replace("{workdir}", workdir) for part in spec.compile_cmd]
         try:
             proc = await asyncio.to_thread(
                 subprocess.run,
@@ -133,11 +141,11 @@ class LocalSandbox:
         if spec is None or spec.compile_cmd is None:
             # Python: python3 source.py
             cmd = (
-                [part.replace("{src}", compiled.binary_path).replace("{bin}", compiled.binary_path)
+                [part.replace("{src}", compiled.binary_path).replace("{bin}", compiled.binary_path).replace("{workdir}", compiled.workdir)
                  for part in (spec.run_cmd if spec else ["python3", compiled.binary_path])]
             )
         else:
-            cmd = [part.replace("{bin}", compiled.binary_path).replace("{src}", compiled.binary_path)
+            cmd = [part.replace("{bin}", compiled.binary_path).replace("{src}", compiled.binary_path).replace("{workdir}", compiled.workdir)
                    for part in spec.run_cmd]
 
         # Cộng thêm 500ms buffer cho subprocess setup + GC.

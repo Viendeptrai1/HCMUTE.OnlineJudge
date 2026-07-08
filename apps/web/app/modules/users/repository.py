@@ -19,6 +19,8 @@ class UserRepository(Protocol):
 
     async def add(self, entity: User) -> User: ...
 
+    async def update(self, entity: User, updates: dict) -> User: ...
+
 
 class SqlAlchemyUserRepository(SqlAlchemyRepository[User]):
     model = User
